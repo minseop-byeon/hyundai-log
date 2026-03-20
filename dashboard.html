@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>차량 운행 대시보드</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: rgba(255, 252, 245, 0.92);
+      --line: #d8cfc0;
+      --text: #1e2430;
+      --muted: #5f6b7a;
+      --accent: #0f6c5c;
+      --accent-strong: #0a4f44;
+      --warn: #b45a3c;
+      --shadow: 0 18px 50px rgba(32, 38, 45, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(15, 108, 92, 0.14), transparent 28%),
+        radial-gradient(circle at top right, rgba(180, 90, 60, 0.12), transparent 20%),
+        linear-gradient(180deg, #f8f4ed 0%, var(--bg) 55%, #ebe4d8 100%);
+      min-height: 100vh;
+    }
+
+    .shell {
+      width: min(1200px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 20px;
+      align-items: stretch;
+      margin-bottom: 20px;
+    }
+
+    .hero-card, .panel {
+      background: var(--panel);
+      border: 1px solid rgba(216, 207, 192, 0.85);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero-card {
+      padding: 28px;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 48px);
+      line-height: 1.05;
+    }
+
+    .sub {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.6;
+      max-width: 62ch;
+    }
+
+    .status-box {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 14px;
+      width: fit-content;
+      background: rgba(15, 108, 92, 0.1);
+      color: var(--accent-strong);
+    }
+
+    .status-pill.off {
+      background: rgba(180, 90, 60, 0.12);
+      color: var(--warn);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .field, .stat, .panel {
+      padding: 18px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .field select, .field button {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fffdf8;
+      padding: 12px 14px;
+      font: inherit;
+      color: var(--text);
+    }
+
+    .field button {
+      cursor: pointer;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+      color: white;
+      border: none;
+      margin-top: 24px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 32px;
+      margin-top: 10px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 20px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid rgba(216, 207, 192, 0.7);
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .empty {
+      padding: 18px;
+      border-radius: 18px;
+      background: rgba(216, 207, 192, 0.18);
+      color: var(--muted);
+    }
+
+    .links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .links a {
+      text-decoration: none;
+      color: var(--accent-strong);
+      font-weight: 700;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(15, 108, 92, 0.08);
+    }
+
+    .action-btn {
+      border: none;
+      cursor: pointer;
+      color: white;
+      font-weight: 700;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1a7f6c 0%, #0a4f44 100%);
+      font: inherit;
+    }
+
+    @media (max-width: 960px) {
+      .hero, .grid, .controls, .stats {
+        grid-template-columns: 1fr;
+      }
+      .field button {
+        margin-top: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="hero-card">
+        <div class="eyebrow">Hyundai Vehicle Log</div>
+        <h1>차량 운행 데이터를 웹에서 바로 확인합니다.</h1>
+        <p class="sub">
+          현재 적재 상태, 최근 주행 기록, 월간 집계, 스케줄러 상태를 한 화면에서 볼 수 있도록 구성했습니다.
+          데이터가 아직 비어 있어도 어디가 비었는지 바로 확인할 수 있습니다.
+        </p>
+      </div>
+      <div class="hero-card status-box">
+        <div>
+          <div class="eyebrow">Runtime</div>
+          <div id="scheduler-pill" class="status-pill off">스케줄러 확인 중</div>
+        </div>
+        <div class="meta" id="token-state">토큰 상태 확인 중</div>
+        <div class="meta" id="selected-car-label">차량 선택 없음</div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <div class="field panel">
+        <label for="car-select">차량</label>
+        <select id="car-select"></select>
+      </div>
+      <div class="field panel">
+        <label for="year-select">연도</label>
+        <select id="year-select"></select>
+      </div>
+      <div class="field panel">
+        <label for="month-select">월</label>
+        <select id="month-select"></select>
+      </div>
+      <div class="field panel">
+        <button id="reload-btn" type="button">데이터 새로고침</button>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat panel"><span>Vehicles</span><strong id="vehicle-count">0</strong></div>
+      <div class="stat panel"><span>Odometer Logs</span><strong id="odometer-count">0</strong></div>
+      <div class="stat panel"><span>Daily Reports</span><strong id="daily-count">0</strong></div>
+      <div class="stat panel"><span>Manual Entries</span><strong id="manual-count">0</strong></div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>월간 집계</h2>
+        <div class="meta" id="monthly-meta">집계 정보 로딩 중</div>
+        <div id="monthly-summary"></div>
+        <div class="links">
+          <a id="xlsx-link" href="#" target="_blank" rel="noreferrer">월간 XLSX 다운로드</a>
+          <a id="pdf-link" href="#" target="_blank" rel="noreferrer">월간 PDF 다운로드</a>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>최근 운행 리포트</h2>
+        <div id="recent-reports"></div>
+      </div>
+
+      <div class="panel">
+        <h2>최근 계기판 로그</h2>
+        <div id="recent-logs"></div>
+      </div>
+
+      <div class="panel">
+        <h2>다음 단계</h2>
+        <div class="empty">
+          1. 아래 버튼으로 현대 OAuth 로그인 진행<br />
+          2. 콜백 완료 시 차량 동기화와 스케줄러 시작 자동 처리<br />
+          3. 내일부터 10:00~17:55 수집, 18:00 일일 확정 자동 처리
+        </div>
+        <div class="links">
+          <button id="login-btn" class="action-btn" type="button">현대 로그인 시작</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const carSelect = document.getElementById("car-select");
+    const yearSelect = document.getElementById("year-select");
+    const monthSelect = document.getElementById("month-select");
+    const reloadBtn = document.getElementById("reload-btn");
+    const loginBtn = document.getElementById("login-btn");
+
+    function fillSelect(select, values, formatter) {
+      select.innerHTML = "";
+      values.forEach((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = formatter ? formatter(value) : value;
+        select.appendChild(option);
+      });
+    }
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat("ko-KR").format(value || 0);
+    }
+
+    function renderTable(container, columns, rows) {
+      if (!rows.length) {
+        container.innerHTML = '<div class="empty">표시할 데이터가 없습니다.</div>';
+        return;
+      }
+
+      const thead = columns.map((col) => `<th>${col.label}</th>`).join("");
+      const tbody = rows.map((row) => {
+        const tds = columns.map((col) => `<td>${row[col.key] ?? ""}</td>`).join("");
+        return `<tr>${tds}</tr>`;
+      }).join("");
+
+      container.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+    }
+
+    async function loadDashboard() {
+      const params = new URLSearchParams({
+        year: yearSelect.value,
+        month: monthSelect.value,
+      });
+
+      if (carSelect.value) {
+        params.set("car_id", carSelect.value);
+      }
+
+      const response = await fetch(`/dashboard/data?${params.toString()}`);
+      const data = await response.json();
+
+      if (!carSelect.dataset.ready) {
+        carSelect.innerHTML = "";
+        const blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = data.vehicles.length ? "기본 차량 사용" : "등록된 차량 없음";
+        carSelect.appendChild(blank);
+
+        data.vehicles.forEach((vehicle) => {
+          const option = document.createElement("option");
+          option.value = vehicle.car_id;
+          option.textContent = [vehicle.car_sellname || vehicle.car_name || "이름없음", vehicle.car_id].join(" / ");
+          carSelect.appendChild(option);
+        });
+        carSelect.dataset.ready = "true";
+        if (data.monthly.car_id) {
+          carSelect.value = data.monthly.car_id;
+        }
+      }
+
+      document.getElementById("vehicle-count").textContent = formatNumber(data.summary.vehicle_count);
+      document.getElementById("odometer-count").textContent = formatNumber(data.summary.odometer_log_count);
+      document.getElementById("daily-count").textContent = formatNumber(data.summary.daily_report_count);
+      document.getElementById("manual-count").textContent = formatNumber(data.summary.manual_entry_count);
+
+      const schedulerPill = document.getElementById("scheduler-pill");
+      const running = Boolean(data.scheduler.running);
+      schedulerPill.textContent = running ? "스케줄러 실행 중" : "스케줄러 중지됨";
+      schedulerPill.className = `status-pill${running ? "" : " off"}`;
+
+      document.getElementById("token-state").textContent = data.summary.has_token
+        ? "OAuth 토큰이 저장되어 있습니다."
+        : "OAuth 토큰이 아직 없습니다.";
+
+      document.getElementById("selected-car-label").textContent = data.monthly.car_id
+        ? `선택 차량: ${data.monthly.car_id}`
+        : "선택 차량 없음";
+
+      document.getElementById("monthly-meta").textContent =
+        `${data.monthly.year}년 ${data.monthly.month}월 기준`;
+
+      const monthlySummary = document.getElementById("monthly-summary");
+      monthlySummary.innerHTML = `
+        <div class="empty">
+          월간 일별 리포트 ${formatNumber(data.monthly.daily_report_count)}건<br />
+          수동 입력 ${formatNumber(data.monthly.manual_entry_count)}건<br />
+          총 운행거리 ${formatNumber(data.monthly.total_distance_km)} km
+        </div>
+      `;
+
+      const query = new URLSearchParams({
+        year: data.monthly.year,
+        month: data.monthly.month,
+      });
+      if (data.monthly.car_id) {
+        query.set("car_id", data.monthly.car_id);
+      }
+      document.getElementById("xlsx-link").href = `/reports/monthly/xlsx?${query.toString()}`;
+      document.getElementById("pdf-link").href = `/reports/monthly/pdf?${query.toString()}`;
+
+      renderTable(
+        document.getElementById("recent-reports"),
+        [
+          { key: "drive_date", label: "일자" },
+          { key: "car_id", label: "차량ID" },
+          { key: "start_time", label: "출발" },
+          { key: "end_time", label: "도착" },
+          { key: "distance_km", label: "거리(km)" }
+        ],
+        data.recent_reports
+      );
+
+      renderTable(
+        document.getElementById("recent-logs"),
+        [
+          { key: "log_date", label: "일자" },
+          { key: "log_time", label: "시간" },
+          { key: "car_id", label: "차량ID" },
+          { key: "odometer_value", label: "계기판" }
+        ],
+        data.recent_logs
+      );
+    }
+
+    const now = new Date();
+    fillSelect(yearSelect, [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]);
+    yearSelect.value = String(now.getFullYear());
+    fillSelect(monthSelect, Array.from({ length: 12 }, (_, i) => i + 1), (value) => `${value}월`);
+    monthSelect.value = String(now.getMonth() + 1);
+
+    reloadBtn.addEventListener("click", loadDashboard);
+    carSelect.addEventListener("change", loadDashboard);
+    yearSelect.addEventListener("change", loadDashboard);
+    monthSelect.addEventListener("change", loadDashboard);
+    loginBtn.addEventListener("click", async () => {
+      const response = await fetch("/auth/login-url");
+      const data = await response.json();
+      if (data.login_url) {
+        window.location.href = data.login_url;
+      }
+    });
+
+    loadDashboard().catch((error) => {
+      console.error(error);
+      document.getElementById("monthly-summary").innerHTML =
+        '<div class="empty">대시보드 데이터를 불러오지 못했습니다.</div>';
+    });
+  </script>
+</body>
+</html>

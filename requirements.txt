@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+oracledb
+apscheduler
+python-dotenv
+httpx
+holidays
+openpyxl
+reportlab

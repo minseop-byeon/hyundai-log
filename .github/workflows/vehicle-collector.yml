@@ -1,0 +1,74 @@
+name: Vehicle Collector
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Job mode
+        required: true
+        default: collect
+        type: choice
+        options:
+          - collect
+          - finalize
+      force:
+        description: Ignore weekday/time guard
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "*/5 1-8 * * 1-5"
+    - cron: "0 9 * * 1-5"
+
+jobs:
+  run-job:
+    runs-on: ubuntu-latest
+    env:
+      HYUNDAI_CLIENT_ID: ${{ secrets.HYUNDAI_CLIENT_ID }}
+      HYUNDAI_CLIENT_SECRET: ${{ secrets.HYUNDAI_CLIENT_SECRET }}
+      HYUNDAI_REDIRECT_URI: ${{ secrets.HYUNDAI_REDIRECT_URI }}
+      HYUNDAI_AUTH_BASE: ${{ secrets.HYUNDAI_AUTH_BASE }}
+      HYUNDAI_DATA_BASE: ${{ secrets.HYUNDAI_DATA_BASE }}
+      APP_STATE: ${{ secrets.APP_STATE }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ORACLE_USER: ${{ secrets.ORACLE_USER }}
+      ORACLE_PASSWORD: ${{ secrets.ORACLE_PASSWORD }}
+      ORACLE_DSN: ${{ secrets.ORACLE_DSN }}
+      ORACLE_WALLET_DIR: Wallet_HYUNDAIDB
+      ORACLE_WALLET_PASSWORD: ${{ secrets.ORACLE_WALLET_PASSWORD }}
+      HYUNDAI_CAR_ID: ${{ secrets.HYUNDAI_CAR_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Restore Oracle wallet
+        env:
+          ORACLE_WALLET_ZIP_BASE64: ${{ secrets.ORACLE_WALLET_ZIP_BASE64 }}
+        run: |
+          test -n "$ORACLE_WALLET_ZIP_BASE64"
+          printf '%s' "$ORACLE_WALLET_ZIP_BASE64" | base64 -d > Wallet_HYUNDAIDB.zip
+          unzip -o Wallet_HYUNDAIDB.zip -d Wallet_HYUNDAIDB
+
+      - name: Collect odometer
+        if: |
+          github.event.schedule == '*/5 1-8 * * 1-5' ||
+          (github.event_name == 'workflow_dispatch' && inputs.mode == 'collect' && inputs.force != true)
+        run: python collect_job.py --mode collect
+
+      - name: Finalize daily report
+        if: |
+          github.event.schedule == '0 9 * * 1-5' ||
+          (github.event_name == 'workflow_dispatch' && inputs.mode == 'finalize')
+        run: python collect_job.py --mode finalize
+
+      - name: Force collect
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'collect' && inputs.force == true
+        run: python collect_job.py --mode collect --force

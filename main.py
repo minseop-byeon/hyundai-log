@@ -26,6 +26,13 @@ app = FastAPI(title="Hyundai Vehicle Log API", version="0.1.0")
 BASE_DIR = Path(__file__).resolve().parent
 
 
+def _parse_iso_date(value: str, field_name: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field_name} must be YYYY-MM-DD") from exc
+
+
 class ManualEntryUpsert(BaseModel):
     passenger_name: str | None = Field(default=None)
     start_time: str | None = Field(default=None, description="HH:MM")
@@ -339,6 +346,92 @@ def dashboard_data(
         "monthly": monthly,
         "recent_reports": recent_reports,
         "recent_logs": recent_logs,
+    }
+
+
+@app.get("/dashboard/history")
+def dashboard_history(
+    start_date: str | None = Query(default=None),
+    end_date: str | None = Query(default=None),
+    car_id: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+):
+    resolved_car_id = car_id or _first_vehicle_id(db)
+    today = date.today()
+
+    resolved_end = _parse_iso_date(end_date, "end_date") if end_date else today
+    resolved_start = _parse_iso_date(start_date, "start_date") if start_date else (resolved_end - timedelta(days=29))
+
+    if resolved_start > resolved_end:
+        raise HTTPException(status_code=400, detail="start_date must be on or before end_date")
+
+    reports_query = db.query(DailyReport).filter(
+        DailyReport.drive_date >= resolved_start,
+        DailyReport.drive_date <= resolved_end,
+    )
+    logs_query = db.query(OdometerLog).filter(
+        OdometerLog.log_date >= resolved_start,
+        OdometerLog.log_date <= resolved_end,
+    )
+    manuals_query = db.query(DailyManualEntry).filter(
+        DailyManualEntry.drive_date >= resolved_start,
+        DailyManualEntry.drive_date <= resolved_end,
+    )
+
+    if resolved_car_id:
+        reports_query = reports_query.filter(DailyReport.car_id == resolved_car_id)
+        logs_query = logs_query.filter(OdometerLog.car_id == resolved_car_id)
+        manuals_query = manuals_query.filter(DailyManualEntry.car_id == resolved_car_id)
+
+    reports = (
+        reports_query
+        .order_by(DailyReport.drive_date.desc())
+        .limit(limit)
+        .all()
+    )
+    logs = (
+        logs_query
+        .order_by(OdometerLog.log_date.desc(), OdometerLog.log_time.desc())
+        .limit(limit)
+        .all()
+    )
+    manual_count = manuals_query.count()
+
+    return {
+        "range": {
+            "start_date": str(resolved_start),
+            "end_date": str(resolved_end),
+            "car_id": resolved_car_id,
+            "limit": limit,
+        },
+        "counts": {
+            "report_count": len(reports),
+            "log_count": len(logs),
+            "manual_count": manual_count,
+            "total_distance_km": sum((row.distance_km or 0) for row in reports),
+        },
+        "reports": [
+            {
+                "car_id": row.car_id,
+                "drive_date": str(row.drive_date),
+                "start_time": row.start_time,
+                "end_time": row.end_time,
+                "odometer_start": row.odometer_start,
+                "odometer_end": row.odometer_end,
+                "distance_km": row.distance_km,
+            }
+            for row in reports
+        ],
+        "logs": [
+            {
+                "car_id": row.car_id,
+                "log_date": str(row.log_date),
+                "log_time": row.log_time,
+                "odometer_value": row.odometer_value,
+            }
+            for row in logs
+        ],
     }
 
 

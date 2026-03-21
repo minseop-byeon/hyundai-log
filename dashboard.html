@@ -139,6 +139,7 @@
     }
 
     .field select,
+    .field input,
     .field button {
       width: 100%;
       border: 1px solid var(--line);
@@ -192,6 +193,15 @@
       color: var(--muted);
       font-size: 14px;
       line-height: 1.6;
+    }
+
+    .section-title {
+      margin: 8px 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
     }
 
     .empty {
@@ -303,6 +313,29 @@
       <div class="stat panel"><span>Manual Entries</span><strong id="manual-count">0</strong></div>
     </section>
 
+    <div class="section-title">기간 조회</div>
+    <section class="controls">
+      <div class="field panel">
+        <label for="start-date">시작일</label>
+        <input id="start-date" type="date" />
+      </div>
+      <div class="field panel">
+        <label for="end-date">종료일</label>
+        <input id="end-date" type="date" />
+      </div>
+      <div class="field panel">
+        <label for="history-limit">최대 건수</label>
+        <select id="history-limit">
+          <option value="100">100건</option>
+          <option value="200" selected>200건</option>
+          <option value="500">500건</option>
+        </select>
+      </div>
+      <div class="field panel">
+        <button id="history-btn" type="button">기간 조회 실행</button>
+      </div>
+    </section>
+
     <section class="grid">
       <div class="panel">
         <h2>월간 집계</h2>
@@ -336,6 +369,18 @@
         </div>
       </div>
     </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>기간별 일일 리포트</h2>
+        <div class="meta" id="history-meta">기간 데이터를 불러오는 중입니다.</div>
+        <div id="history-reports"></div>
+      </div>
+      <div class="panel">
+        <h2>기간별 주행 로그</h2>
+        <div id="history-logs"></div>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -344,6 +389,10 @@
     const monthSelect = document.getElementById("month-select");
     const reloadBtn = document.getElementById("reload-btn");
     const loginBtn = document.getElementById("login-btn");
+    const startDateInput = document.getElementById("start-date");
+    const endDateInput = document.getElementById("end-date");
+    const historyLimitSelect = document.getElementById("history-limit");
+    const historyBtn = document.getElementById("history-btn");
 
     function fillSelect(select, values, formatter) {
       select.innerHTML = "";
@@ -359,6 +408,10 @@
       return new Intl.NumberFormat("ko-KR").format(value || 0);
     }
 
+    function toIsoDate(value) {
+      return value.toISOString().slice(0, 10);
+    }
+
     function renderTable(container, columns, rows) {
       if (!rows.length) {
         container.innerHTML = '<div class="empty">표시할 데이터가 없습니다.</div>';
@@ -372,6 +425,47 @@
       }).join("");
 
       container.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+    }
+
+    async function loadHistory() {
+      const params = new URLSearchParams({
+        start_date: startDateInput.value,
+        end_date: endDateInput.value,
+        limit: historyLimitSelect.value
+      });
+
+      if (carSelect.value) {
+        params.set("car_id", carSelect.value);
+      }
+
+      const response = await fetch(`/dashboard/history?${params.toString()}`);
+      const data = await response.json();
+
+      document.getElementById("history-meta").textContent =
+        `${data.range.start_date} ~ ${data.range.end_date} · 리포트 ${formatNumber(data.counts.report_count)}건 · 로그 ${formatNumber(data.counts.log_count)}건 · 총 운행거리 ${formatNumber(data.counts.total_distance_km)} km`;
+
+      renderTable(
+        document.getElementById("history-reports"),
+        [
+          { key: "drive_date", label: "일자" },
+          { key: "car_id", label: "차량 ID" },
+          { key: "start_time", label: "출발" },
+          { key: "end_time", label: "도착" },
+          { key: "distance_km", label: "거리(km)" }
+        ],
+        data.reports
+      );
+
+      renderTable(
+        document.getElementById("history-logs"),
+        [
+          { key: "log_date", label: "일자" },
+          { key: "log_time", label: "시간" },
+          { key: "car_id", label: "차량 ID" },
+          { key: "odometer_value", label: "주행거리" }
+        ],
+        data.logs
+      );
     }
 
     async function loadDashboard() {
@@ -474,9 +568,18 @@
         ],
         data.recent_logs
       );
+
+      await loadHistory();
     }
 
     const now = new Date();
+    const defaultEndDate = new Date();
+    const defaultStartDate = new Date();
+    defaultStartDate.setDate(defaultEndDate.getDate() - 29);
+
+    startDateInput.value = toIsoDate(defaultStartDate);
+    endDateInput.value = toIsoDate(defaultEndDate);
+
     fillSelect(yearSelect, [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]);
     yearSelect.value = String(now.getFullYear());
     fillSelect(monthSelect, Array.from({ length: 12 }, (_, i) => i + 1), (value) => `${value}월`);
@@ -486,6 +589,7 @@
     carSelect.addEventListener("change", loadDashboard);
     yearSelect.addEventListener("change", loadDashboard);
     monthSelect.addEventListener("change", loadDashboard);
+    historyBtn.addEventListener("click", loadHistory);
     loginBtn.addEventListener("click", async () => {
       const response = await fetch("/auth/login-url");
       const data = await response.json();

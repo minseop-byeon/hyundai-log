@@ -1,5 +1,8 @@
 name: Vehicle Collector
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -17,8 +20,8 @@ on:
         default: false
         type: boolean
   schedule:
-    - cron: "*/5 1-8 * * 1-5"
-    - cron: "0 9 * * 1-5"
+    - cron: "*/5 * * * *"
+    - cron: "2 * * * *"
 
 jobs:
   run-job:
@@ -37,8 +40,15 @@ jobs:
       ORACLE_WALLET_DIR: Wallet_HYUNDAIDB
       ORACLE_WALLET_PASSWORD: ${{ secrets.ORACLE_WALLET_PASSWORD }}
       HYUNDAI_CAR_ID: ${{ secrets.HYUNDAI_CAR_ID }}
+      HYUNDAI_CAR_IDS: ${{ secrets.HYUNDAI_CAR_IDS }}
+      COLLECT_ALLOW_NON_WORKING_DAYS: "1"
+      COLLECT_START_HOUR: "0"
+      COLLECT_END_HOUR: "23"
+      FINALIZE_LOOKBACK_DAYS: "2"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -59,16 +69,33 @@ jobs:
 
       - name: Collect odometer
         if: |
-          github.event.schedule == '*/5 1-8 * * 1-5' ||
+          github.event.schedule == '*/5 * * * *' ||
           (github.event_name == 'workflow_dispatch' && inputs.mode == 'collect' && inputs.force != true)
         run: python collect_job.py --mode collect
 
       - name: Finalize daily report
         if: |
-          github.event.schedule == '0 9 * * 1-5' ||
+          github.event.schedule == '2 * * * *' ||
           (github.event_name == 'workflow_dispatch' && inputs.mode == 'finalize')
-        run: python collect_job.py --mode finalize
+        run: python collect_job.py --mode finalize --finalize-lookback-days 2
 
       - name: Force collect
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'collect' && inputs.force == true
         run: python collect_job.py --mode collect --force
+
+      - name: Export sanitized SQLite snapshot
+        run: python snapshot_export.py
+
+      - name: Commit snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- vehicle_log_snapshot.db; then
+            echo "No snapshot changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vehicle_log_snapshot.db
+          git commit -m "Update vehicle log snapshot"
+          git push

@@ -1,4 +1,5 @@
 ﻿import asyncio
+import os
 from datetime import date, datetime, timedelta
 
 import holidays as pyholidays
@@ -11,6 +12,9 @@ from models import DailyReport, OdometerLog, TokenStore
 
 _scheduler = None
 _scheduler_car_id = None
+COLLECT_ALLOW_NON_WORKING_DAYS = os.getenv("COLLECT_ALLOW_NON_WORKING_DAYS", "1").strip() == "1"
+COLLECT_START_HOUR = max(0, min(23, int(os.getenv("COLLECT_START_HOUR", "0") or "0")))
+COLLECT_END_HOUR = max(0, min(23, int(os.getenv("COLLECT_END_HOUR", "23") or "23")))
 
 
 def _kr_holidays(year: int):
@@ -23,6 +27,16 @@ def is_non_working_day(target_date: date) -> bool:
     if target_date in _kr_holidays(target_date.year):
         return True
     return False
+
+
+def should_collect_at(local_now: datetime, force: bool = False) -> bool:
+    if force:
+        return True
+    if not COLLECT_ALLOW_NON_WORKING_DAYS and is_non_working_day(local_now.date()):
+        return False
+    if local_now.hour < COLLECT_START_HOUR or local_now.hour > COLLECT_END_HOUR:
+        return False
+    return True
 
 
 async def _ensure_valid_access_token(db: Session, client: HyundaiClient) -> str | None:
@@ -125,11 +139,7 @@ async def _collect_odometer(car_id: str, force: bool = False):
     try:
         local_now = datetime.now()
 
-        if not force and is_non_working_day(local_now.date()):
-            return
-
-        # 10:00 ~ 17:00 only
-        if not force and (local_now.hour < 10 or local_now.hour > 17):
+        if not should_collect_at(local_now, force=force):
             return
 
         access_token = await _ensure_valid_access_token(db, client)
@@ -214,7 +224,7 @@ def _finalize_daily_report(car_id: str, target_date: date):
     db: Session = SessionLocal()
 
     try:
-        if is_non_working_day(target_date):
+        if not COLLECT_ALLOW_NON_WORKING_DAYS and is_non_working_day(target_date):
             print(f"[FINALIZE] skipped non-working day: {target_date}")
             return
 
